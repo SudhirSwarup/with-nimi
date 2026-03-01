@@ -110,14 +110,7 @@
     to   { opacity:1; transform: translateY(0); }
   }
 
-  /* BANNER */
-  .config-banner {
-    background: var(--deep); color: var(--cream);
-    text-align: center; padding: 18px 24px;
-    font-size: 0.85rem; letter-spacing: 0.04em;
-  }
-  .config-banner strong { color: var(--gold); }
-  .config-banner a { color: var(--blush); text-decoration: underline; cursor: pointer; }
+
 
   /* TIMELINE */
   .timeline-section { padding: 80px 20px; max-width: 1000px; margin: 0 auto; }
@@ -338,16 +331,7 @@
   }
   .film-ph.active { border-color:var(--gold); opacity:1; }
 
-  /* SETUP */
-  .setup-section { background:var(--deep); color:var(--cream); padding:80px 40px; text-align:center; }
-  .setup-section h2 { font-family:'Playfair Display',serif; font-size:clamp(1.8rem,4vw,3rem); font-style:italic; font-weight:400; color:var(--gold); margin-bottom:12px; }
-  .setup-section .intro { font-size:1rem; color:var(--faded); font-style:italic; margin-bottom:50px; letter-spacing:0.03em; }
-  .steps { display:grid; grid-template-columns:repeat(auto-fit,minmax(200px,1fr)); gap:32px; max-width:900px; margin:0 auto 50px; text-align:left; }
-  .step { border-top:1px solid rgba(200,169,110,0.3); padding-top:20px; }
-  .step-num { font-family:'Playfair Display',serif; font-size:3rem; color:rgba(200,169,110,0.2); line-height:1; margin-bottom:10px; font-style:italic; }
-  .step h3 { font-family:'Playfair Display',serif; font-size:1.1rem; font-weight:400; color:var(--gold); margin-bottom:8px; }
-  .step p  { font-size:0.85rem; color:var(--faded); line-height:1.7; }
-  .step code { background:rgba(255,255,255,0.1); padding:2px 6px; font-size:0.8rem; color:var(--blush); font-family:monospace; }
+
 
   footer { text-align:center; padding:40px 20px; background:var(--cream); border-top:1px dashed var(--faded); color:var(--faded); font-size:0.85rem; font-style:italic; }
   footer .heart { color:var(--rose); }
@@ -393,11 +377,7 @@
   <div class="scroll-cue"><div class="scroll-line"></div><span>our story</span></div>
 </section>
 
-<!-- Banner -->
-<div class="config-banner" id="configBanner">
-  📸 <strong>Demo Mode</strong> — Showing sample photos to preview the experience.
-  <a onclick="document.getElementById('setupSection').scrollIntoView({behavior:'smooth'})">See setup steps</a> to connect your Google Drive.
-</div>
+
 
 <!-- Timeline -->
 <section class="timeline-section">
@@ -405,18 +385,7 @@
   <div class="timeline" id="timeline"></div>
 </section>
 
-<!-- Setup -->
-<section class="setup-section" id="setupSection">
-  <h2>Connect Your Google Drive</h2>
-  <p class="intro">A one-time setup to bring your real memories here</p>
-  <div class="steps">
-    <div class="step"><div class="step-num">01</div><h3>Get a Google API Key</h3><p>Go to <strong>console.cloud.google.com</strong> → New Project → Enable <strong>Google Drive API</strong> → Credentials → Create API Key.</p></div>
-    <div class="step"><div class="step-num">02</div><h3>Make Folder Public</h3><p>Right-click <strong>"With Nimi"</strong> in Drive → Share → Anyone with link → Viewer. Copy the Folder ID from the URL.</p></div>
-    <div class="step"><div class="step-num">03</div><h3>Add Your Keys</h3><p>In the HTML, replace <code>YOUR_API_KEY</code> and <code>YOUR_FOLDER_ID</code>, then set <code>DEMO_MODE: false</code>.</p></div>
-    <div class="step"><div class="step-num">04</div><h3>Host Free on GitHub Pages</h3><p>Upload the HTML to a GitHub repo → Settings → Pages → Deploy. Share the URL with Nimi.</p></div>
-  </div>
-  <p style="color:var(--faded);font-size:0.85rem;font-style:italic;">All free. No monthly costs. Your photos stay in your Google Drive.</p>
-</section>
+
 
 <footer>Made with <span class="heart">♥</span> — every photo a memory, every memory a treasure.</footer>
 
@@ -648,7 +617,6 @@ document.addEventListener('keydown', e => {
 /* ── GOOGLE DRIVE (when DEMO_MODE=false) ── */
 async function loadFromDrive() {
   if (CONFIG.DEMO_MODE || CONFIG.API_KEY === 'YOUR_API_KEY') { buildTimeline(DEMO_EVENTS); return; }
-  document.getElementById('configBanner').style.display = 'none';
   try {
     const r = await fetch(`https://www.googleapis.com/drive/v3/files?q='${CONFIG.FOLDER_ID}'+in+parents+and+mimeType='application/vnd.google-apps.folder'&orderBy=name&key=${CONFIG.API_KEY}&fields=files(id,name)`);
     const d = await r.json();
