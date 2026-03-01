@@ -209,7 +209,12 @@
     font-size:clamp(1.4rem,3vw,2rem); font-style:italic; font-weight:400; color:var(--deep);
   }
   .folder-modal-header p { font-family:'Dancing Script',cursive; color:var(--rose); font-size:1rem; margin-top:4px; }
-  .modal-close-btn {
+  .modal-back-btn {
+    background:none; border:none; font-size:1.2rem; cursor:pointer; color:var(--rose);
+    font-family:'Cormorant Garamond',serif; padding:0 8px 0 0;
+    transition:opacity 0.2s; line-height:1;
+  }
+  .modal-back-btn:hover { opacity:0.6; }
     background:none; border:none; font-size:1.3rem; cursor:pointer; color:var(--faded);
     width:36px; height:36px; display:flex; align-items:center; justify-content:center;
     border-radius:50%; transition:background 0.2s, color 0.2s; flex-shrink:0; margin-left:16px; margin-top:-4px;
@@ -393,7 +398,10 @@
 <div class="folder-overlay" id="folderOverlay">
   <div class="folder-modal">
     <div class="folder-modal-header">
-      <div><h2 id="folderTitle"></h2><p id="folderSub"></p></div>
+      <div style="display:flex;align-items:center;gap:12px;">
+        <button class="modal-back-btn" id="modalBackBtn" onclick="modalGoBack()" style="display:none;">←</button>
+        <div><h2 id="folderTitle"></h2><p id="folderSub"></p></div>
+      </div>
       <button class="modal-close-btn" onclick="closeFolder()">✕</button>
     </div>
     <div class="folder-photo-count" id="folderCount"></div>
@@ -449,6 +457,18 @@ const DEMO_PHOTOS = {
 let curEvent  = null;
 let curPhotos = [];
 let curIdx    = 0;
+let folderHistory = []; // stack for back navigation
+
+function modalGoBack() {
+  if (folderHistory.length > 0) {
+    const prev = folderHistory.pop();
+    window.openFolderById(prev.folderId, prev.title, prev.date, false);
+  }
+}
+
+// Wrap openFolderById to track history
+const _origOpen = window.openFolderById;
+
 
 /* ── TIMELINE ── */
 function buildTimeline(events) {
@@ -638,38 +658,91 @@ async function loadFromDrive() {
     window._driveEvents = events;
     buildTimeline(events);
 
-    // Patch openFolder for real Drive data
-    window.openFolder = async function(idx) {
-      const ev = window._driveEvents[idx];
-      curEvent = ev;
-      const pr = await fetch(`https://www.googleapis.com/drive/v3/files?q='${ev.folderId}'+in+parents+and+(mimeType+contains+'image/'+or+mimeType+contains+'video/')&orderBy=name&key=${CONFIG.API_KEY}&fields=files(id,name,mimeType)&pageSize=200`);
+    // Open a folder by folderId — handles both photos and subfolders
+    window.openFolderById = async function(folderId, title, date, pushHistory=true) {
+      // Track history for back button
+      if (pushHistory && document.getElementById('folderOverlay').classList.contains('open')) {
+        folderHistory.push({ folderId: curEvent._folderId, title: document.getElementById('folderTitle').textContent, date: curEvent.date||'' });
+      }
+      if (!pushHistory === false) folderHistory = [];
+      document.getElementById('modalBackBtn').style.display = folderHistory.length > 0 ? 'block' : 'none';
+
+      curEvent = { title, date: date||'', emoji:'📸', color:'#c9856a', _folderId: folderId };
+
+      // Fetch everything in this folder
+      const pr = await fetch(`https://www.googleapis.com/drive/v3/files?q='${folderId}'+in+parents&orderBy=name&key=${CONFIG.API_KEY}&fields=files(id,name,mimeType)&pageSize=200`);
       const pd = await pr.json();
-      curPhotos = (pd.files || []).map(f => ({
-        url:   `https://drive.google.com/thumbnail?id=${f.id}&sz=w1600`,
-        thumb: `https://drive.google.com/thumbnail?id=${f.id}&sz=w400`,
-        label: f.name.replace(/\.[^/.]+$/, ''),
-        isVideo: f.mimeType.includes('video'),
-        fileId: f.id,
-      }));
-      document.getElementById('folderTitle').textContent = ev.title;
-      document.getElementById('folderSub').textContent   = '✦ ' + (ev.date || '');
-      document.getElementById('folderCount').innerHTML = `<span>${curPhotos.length}</span> photo${curPhotos.length!==1?'s':''} in this chapter`;
+      const all = pd.files || [];
+
+      const subfolders = all.filter(f => f.mimeType === 'application/vnd.google-apps.folder');
+      const photos     = all.filter(f => f.mimeType.includes('image/') || f.mimeType.includes('video/'));
+
+      document.getElementById('folderTitle').textContent = title;
+      document.getElementById('folderSub').textContent   = date ? '✦ ' + date : '';
       const grid = document.getElementById('folderGrid');
       grid.innerHTML = '';
-      curPhotos.forEach((photo, i) => {
-        const div = document.createElement('div');
-        div.className = 'grid-thumb';
-        div.onclick = () => openLightbox(i);
-        if (photo.thumb) {
-          const img = document.createElement('img'); img.className='loading'; img.src=photo.thumb; img.alt=photo.label||'';
-          img.onload=()=>{img.classList.remove('loading');img.classList.add('loaded');}; img.onerror=()=>{div.innerHTML=`<div class="ph"><span class="pe">📸</span><span class="pt">photo</span></div>`;};
-          div.appendChild(img);
-        } else { div.innerHTML=`<div class="ph"><span class="pe">📸</span><span class="pt">photo</span></div>`; }
-        if (photo.isVideo) { const b=document.createElement('div'); b.className='video-badge'; b.textContent='▶ video'; div.appendChild(b); }
-        grid.appendChild(div);
-      });
+
+      if (subfolders.length > 0) {
+        // Show subfolders as clickable cards
+        document.getElementById('folderCount').innerHTML = `<span>${subfolders.length}</span> album${subfolders.length!==1?'s':''} inside`;
+        subfolders.forEach(sub => {
+          const div = document.createElement('div');
+          div.className = 'grid-thumb subfolder-thumb';
+          div.style.cssText = 'display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;background:linear-gradient(135deg,#f5e6d3,#e8b4a0);cursor:pointer;';
+          div.innerHTML = `
+            <span style="font-size:1.8rem">📁</span>
+            <span style="font-size:0.6rem;text-align:center;padding:0 6px;color:#3d2b1f;font-family:'Cormorant Garamond',serif;line-height:1.3;">${sub.name}</span>`;
+          div.onclick = () => window.openFolderById(sub.id, sub.name, '');
+          // Try to load cover thumbnail for subfolder
+          fetch(`https://www.googleapis.com/drive/v3/files?q='${sub.id}'+in+parents+and+mimeType+contains+'image/'&orderBy=name&pageSize=1&key=${CONFIG.API_KEY}&fields=files(id)`)
+            .then(r=>r.json()).then(d => {
+              if (d.files && d.files[0]) {
+                div.style.backgroundImage = `url(https://drive.google.com/thumbnail?id=${d.files[0].id}&sz=w400)`;
+                div.style.backgroundSize = 'cover';
+                div.style.backgroundPosition = 'center';
+                div.innerHTML = `
+                  <div style="position:absolute;inset:0;background:rgba(30,15,8,0.35);"></div>
+                  <span style="position:relative;font-size:0.65rem;text-align:center;padding:4px 8px;color:#fdf6ee;font-family:'Cormorant Garamond',serif;font-style:italic;line-height:1.3;background:rgba(0,0,0,0.3);">${sub.name}</span>`;
+                div.style.position = 'relative';
+                div.style.overflow = 'hidden';
+              }
+            }).catch(()=>{});
+          grid.appendChild(div);
+        });
+      } else {
+        // Show photos normally
+        curPhotos = photos.map(f => ({
+          url:   `https://drive.google.com/thumbnail?id=${f.id}&sz=w1600`,
+          thumb: `https://drive.google.com/thumbnail?id=${f.id}&sz=w400`,
+          label: f.name.replace(/\.[^/.]+$/, ''),
+          isVideo: f.mimeType.includes('video/'),
+          fileId: f.id,
+        }));
+        document.getElementById('folderCount').innerHTML = `<span>${curPhotos.length}</span> photo${curPhotos.length!==1?'s':''} in this chapter`;
+        curPhotos.forEach((photo, i) => {
+          const div = document.createElement('div');
+          div.className = 'grid-thumb';
+          div.onclick = () => openLightbox(i);
+          if (photo.thumb) {
+            const img = document.createElement('img'); img.className='loading'; img.src=photo.thumb; img.alt=photo.label||'';
+            img.onload=()=>{img.classList.remove('loading');img.classList.add('loaded');}; img.onerror=()=>{div.innerHTML=`<div class="ph"><span class="pe">📸</span><span class="pt">photo</span></div>`;};
+            div.appendChild(img);
+          } else { div.innerHTML=`<div class="ph"><span class="pe">📸</span><span class="pt">photo</span></div>`; }
+          if (photo.isVideo) { const b=document.createElement('div'); b.className='video-badge'; b.textContent='▶ video'; div.appendChild(b); }
+          grid.appendChild(div);
+        });
+      }
+
       document.getElementById('folderOverlay').classList.add('open');
       document.body.style.overflow='hidden';
+    };
+
+    // Main openFolder (from timeline cards)
+    window.openFolder = async function(idx) {
+      folderHistory = [];
+      document.getElementById('modalBackBtn').style.display = 'none';
+      const ev = window._driveEvents[idx];
+      await window.openFolderById(ev.folderId, ev.title, ev.date||'', false);
     };
   } catch(e) { console.error(e); buildTimeline(DEMO_EVENTS); }
 }
